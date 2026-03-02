@@ -1,0 +1,90 @@
+# ARMSX2 Frida APK Repacker
+
+This repository provides releases of [ARMSX2](https://github.com/Mansive/ARMSX2) repacked with [frida-gadget](https://github.com/frida/frida) for instrumentation through PuniArk.
+
+## Local scripts
+
+- `src/armsx2_upstream.py`
+	- `--check --json`: print latest metadata without downloading.
+	- `--download --json`: download latest APK into `downloads/`.
+- `src/repack.py`
+	- Rebuilds APK with Frida Gadget and outputs an unsigned APK.
+	- Default Frida config listens on `127.0.0.1:27042`.
+	- Override with `--listen-address` if needed.
+	- Strips non-`arm64-v8a` ABI directories by default.
+	- Use `--keep-all-abis` to keep `armeabi-v7a`, `x86_64`, etc.
+
+### Repack CLI flags
+
+- `--apk`: input APK path (required)
+- `--out`: output unsigned APK path (required)
+- `--apktool-jar`: apktool jar path (required)
+- `--frida-version`: Frida Gadget version (default `17.6.2`)
+- `--listen-address`: Frida listen address (default `127.0.0.1`)
+- `--listen-port`: Frida listen port (default `27042`)
+- `--cache-dir`: Frida gadget cache directory (default `.cache/frida`)
+- `--work-dir`: optional working directory for apktool output
+- `--target-lib`: force a specific `arm64-v8a` library to inject
+- `--keep-all-abis`: keep all ABI folders (disable arm64-only trimming)
+- `--android-version-code`: set `AndroidManifest.xml` `android:versionCode`
+
+## Upstream source
+
+`src/armsx2_upstream.py` fetches the latest entry from:
+
+- Release list: `https://api.github.com/repos/Mansive/ARMSX2/releases`
+- APK asset: first release asset ending in `.apk`
+
+## GitHub Actions secrets
+
+Create and set these repository secrets:
+
+- `ANDROID_KEYSTORE_P12_B64`
+- `ANDROID_KEYSTORE_PASS`
+
+The key alias is fixed to `armsx2-puni`.
+
+### One-time key generation (.p12)
+
+```bash
+keytool -genkeypair \
+	-storetype PKCS12 \
+	-keystore armsx2-frida.p12 \
+	-alias armsx2-puni \
+	-keyalg RSA \
+	-keysize 2048 \
+	-validity 10000 \
+	-storepass "<PASSWORD>" \
+	-keypass "<PASSWORD>" \
+	-dname "CN=armsx2-frida, OU=CI, O=armsx2-frida, L=NA, ST=NA, C=US"
+```
+
+Base64-encode the generated file and store it in `ANDROID_KEYSTORE_P12_B64`.
+
+## Tests
+
+```bash
+python -m pytest -q
+```
+
+## act
+
+The workflow supports local `act` runs. When `ACT=true`, signing and GitHub release creation are skipped, but the unsigned APK artifact is still uploaded.
+
+If a release for the upstream tag already exists, you can rebuild with the workflow input `rebuild=true` to publish `-rN` tags.
+
+For local `act` testing, create:
+
+```json
+{
+	"inputs": {
+		"rebuild": "true"
+	}
+}
+```
+
+Then run:
+
+```bash
+act -W ".github/workflows/armsx2-frida.yml" workflow_dispatch -e ".act-rebuild.json" --artifact-server-path ".act-artifacts"
+```
